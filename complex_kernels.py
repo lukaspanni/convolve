@@ -3,6 +3,8 @@ import math
 from functools import reduce
 
 # These scales bring the size of the below components to roughly the specified radius - I just hard coded these
+from numba import njit
+
 kernel_scales = [1.4, 1.2, 1.2, 1.2, 1.2, 1.2]
 
 # Kernel parameters a, b, A, B
@@ -45,6 +47,7 @@ kernel_params = [
 # Obtain specific parameters and scale for a given component count
 def get_parameters(component_count=2):
     parameter_index = max(0, min(component_count - 1, len(kernel_params)))
+    # TODO: use object instead of dict for better numba compatibility
     parameter_dictionaries = [dict(zip(['a', 'b', 'A', 'B'], b)) for b in kernel_params[parameter_index]]
     return (parameter_dictionaries, kernel_scales[parameter_index])
 
@@ -62,7 +65,8 @@ def complex_kernel_1d(radius, scale, a, b):
     return kernel_complex.reshape((1, kernel_size))
 
 
-def normalise_kernels(kernels, params):
+# @njit(parallel=True)
+def normalise_kernels(kernels: list, params: list):
     # Normalises with respect to A*real+B*imag
     total = 0
 
@@ -72,7 +76,7 @@ def normalise_kernels(kernels, params):
             for j in range(k.shape[1]):
                 # Complex multiply and weighted sum
                 total += p['A'] * (k[0, i].real * k[0, j].real - k[0, i].imag * k[0, j].imag) + p['B'] * (
-                            k[0, i].real * k[0, j].imag + k[0, i].imag * k[0, j].real)
+                        k[0, i].real * k[0, j].imag + k[0, i].imag * k[0, j].real)
 
     scalar = 1 / math.sqrt(total)
     for kernel in kernels:
@@ -80,12 +84,14 @@ def normalise_kernels(kernels, params):
 
 
 # Combine the real and imaginary parts of an image, weighted by A and B
-def weighted_sum(kernel, params):
-    return np.add(kernel.real * params['A'], kernel.imag * params['B'])
+@njit()
+def weighted_sum(kernel: np.ndarray, param_a: float, param_b: float):
+    return np.add(kernel.real * param_a, kernel.imag * param_b)
 
 
 # Produce a 2D kernel by self-multiplying a 1d kernel. This would be slower to use
 # than the separable approach, mostly for visualisation below
+@njit()
 def multiply_kernel(kernel):
     kernel_size = kernel.shape[1]
     a = np.repeat(kernel, kernel_size, 0)
@@ -99,7 +105,7 @@ def show_kernel(kernels, params, component_index=None):
     if component_index is not None:
         kernel = kernels[component_index]
         kernel_2d = multiply_kernel(kernel)
-        kernel_total = weighted_sum(kernel_2d, params[component_index])
+        kernel_total = weighted_sum(kernel_2d, params[component_index]['A'], params[component_index]['B'])
 
         f, axarr = plt.subplots(1, 3)
         axarr[0].imshow(kernel_2d.real, cmap='gray', interpolation='nearest')
@@ -107,6 +113,6 @@ def show_kernel(kernels, params, component_index=None):
         axarr[2].imshow(kernel_total, cmap='gray', interpolation='nearest')
         plt.show()
     else:
-        kernel_total = reduce(np.add, (weighted_sum(multiply_kernel(k), p) for k, p in zip(kernels, params)))
+        kernel_total = reduce(np.add, (weighted_sum(multiply_kernel(k), p) for k, p in zip(kernels, params['A'], params['B'])))
         plt.imshow(kernel_total, cmap='gray', interpolation='nearest')
         plt.show()

@@ -1,3 +1,7 @@
+from numba import njit
+
+
+@njit()
 def convolve(image, output, kernel):
     channel_count = image.shape[0]
     image_height = image.shape[1]

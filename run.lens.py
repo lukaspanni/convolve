@@ -73,7 +73,7 @@ def main():
             channels.append(signal.convolve2d(inter, component.transpose(), boundary='symm', mode='same'))
 
         # The final component output is a stack of RGB, with weighted sums of real and imaginary parts
-        component_image = np.stack([weighted_sum(channel, component_params) for channel in channels])
+        component_image = np.stack([weighted_sum(channel, component_params['A'], component_params['B']) for channel in channels])
         component_output.append(component_image)
 
     # Add all components together
