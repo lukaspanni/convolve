@@ -1,16 +1,4 @@
-# cython: language_level=3
-# cython: infer_types=True
-cimport cython
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def convolve(float[:, :, ::1] image, float[:, :, ::1] output, float[:, ::1] kernel):
-    cdef ssize_t image_height, image_width, channel_count
-    cdef ssize_t kernel_height, kernel_width, kernel_halfh, kernel_halfw
-    cdef ssize_t x_min, x_max, y_min, y_max, x, y, u, v, c
-    
-    cdef float value, tmp, total
-
+def convolve(image, output, kernel):
     channel_count = image.shape[0]
     image_height = image.shape[1]
     image_width = image.shape[2]
@@ -36,6 +24,6 @@ def convolve(float[:, :, ::1] image, float[:, :, ::1] output, float[:, ::1] kern
                 for u in range(x_min, x_max + 1):
                     for v in range(y_min, y_max + 1):
                         tmp = kernel[v - y + kernel_halfh, u - x + kernel_halfw]
-                        value += image[c, v, u] * tmp  
+                        value += image[c, v, u] * tmp
                         total += tmp
                 output[c, y, x] = value / total
