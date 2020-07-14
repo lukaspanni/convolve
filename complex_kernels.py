@@ -1,10 +1,11 @@
 import numpy as np
 import math
 from functools import reduce
+from numba import njit, float32
+from numba.typed import List
+from numba.experimental import jitclass
 
 # These scales bring the size of the below components to roughly the specified radius - I just hard coded these
-from numba import njit
-
 kernel_scales = [1.4, 1.2, 1.2, 1.2, 1.2, 1.2]
 
 # Kernel parameters a, b, A, B
@@ -44,29 +45,45 @@ kernel_params = [
      [2.201904, 19.032909, -0.152784, -0.107988]]]
 
 
+@jitclass([
+    ('a', float32),
+    ('b', float32),
+    ('A', float32),
+    ('B', float32)
+])
+class parameter(object):
+    def __init__(self, a, b, A, B):
+        self.a = a
+        self.b = b
+        self.A = A
+        self.B = B
+
+
 # Obtain specific parameters and scale for a given component count
 def get_parameters(component_count=2):
     parameter_index = max(0, min(component_count - 1, len(kernel_params)))
-    # TODO: use object instead of dict for better numba compatibility
-    parameter_dictionaries = [dict(zip(['a', 'b', 'A', 'B'], b)) for b in kernel_params[parameter_index]]
-    return (parameter_dictionaries, kernel_scales[parameter_index])
+    parameters = [parameter(*b) for b in kernel_params[parameter_index]]
+    return (parameters, kernel_scales[parameter_index])
 
 
 # Produces a complex kernel of a given radius and scale (adjusts radius to be more accurate)
 # a and b are parameters of this complex kernel
+@njit()
 def complex_kernel_1d(radius, scale, a, b):
     kernel_radius = radius
     kernel_size = kernel_radius * 2 + 1
     ax = np.arange(-kernel_radius, kernel_radius + 1., dtype=np.float32)
-    ax = ax * scale * (1 / kernel_radius)
-    kernel_complex = np.zeros((kernel_size), dtype=np.complex64)
-    kernel_complex.real = np.exp(-a * (ax ** 2)) * np.cos(b * (ax ** 2))
-    kernel_complex.imag = np.exp(-a * (ax ** 2)) * np.sin(b * (ax ** 2))
+    ax = np.power(ax * scale * (1 / kernel_radius), 2)
+    p1 = np.exp(-a * ax)
+    p2 = b * ax
+    real_part = p1 * np.cos(p2)
+    imag_part = 1j * p1 * np.sin(p2)
+    kernel_complex = real_part + imag_part
     return kernel_complex.reshape((1, kernel_size))
 
 
-# @njit(parallel=True)
-def normalise_kernels(kernels: list, params: list):
+@njit()
+def normalise_kernels(kernels: List, params: List):
     # Normalises with respect to A*real+B*imag
     total = 0
 
@@ -75,7 +92,7 @@ def normalise_kernels(kernels: list, params: list):
         for i in range(k.shape[1]):
             for j in range(k.shape[1]):
                 # Complex multiply and weighted sum
-                total += p['A'] * (k[0, i].real * k[0, j].real - k[0, i].imag * k[0, j].imag) + p['B'] * (
+                total += p.A * (k[0, i].real * k[0, j].real - k[0, i].imag * k[0, j].imag) + p.B * (
                         k[0, i].real * k[0, j].imag + k[0, i].imag * k[0, j].real)
 
     scalar = 1 / math.sqrt(total)
@@ -113,6 +130,7 @@ def show_kernel(kernels, params, component_index=None):
         axarr[2].imshow(kernel_total, cmap='gray', interpolation='nearest')
         plt.show()
     else:
-        kernel_total = reduce(np.add, (weighted_sum(multiply_kernel(k), p) for k, p in zip(kernels, params['A'], params['B'])))
+        kernel_total = reduce(np.add,
+                              (weighted_sum(multiply_kernel(k), p) for k, p in zip(kernels, params['A'], params['B'])))
         plt.imshow(kernel_total, cmap='gray', interpolation='nearest')
         plt.show()

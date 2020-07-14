@@ -55,11 +55,15 @@ def main():
     parameters, scale = get_parameters(component_count=args.components)
 
     # Create each component for size radius, using scale and other component parameters
-    components = [complex_kernel_1d(radius, scale, component_params['a'], component_params['b']) for component_params in
+    components = [complex_kernel_1d(radius, scale, component_params.a, component_params.b) for component_params in
                   parameters]
 
+    typed_params = List()
+    typed_kernels = List()
+    [typed_params.append(p) for p in parameters]
+    [typed_kernels.append(k) for k in components]
     # Normalise all kernels together (the combination of all applied kernels in 2D must sum to 1)
-    normalise_kernels(components, parameters)
+    normalise_kernels(typed_kernels, typed_params)
 
     # Increase exposure to highlight bright spots
     gamma_exposure(img, args.exposure_gamma)
@@ -73,7 +77,8 @@ def main():
             channels.append(signal.convolve2d(inter, component.transpose(), boundary='symm', mode='same'))
 
         # The final component output is a stack of RGB, with weighted sums of real and imaginary parts
-        component_image = np.stack([weighted_sum(channel, component_params['A'], component_params['B']) for channel in channels])
+        component_image = np.stack(
+            [weighted_sum(channel, component_params.A, component_params.B) for channel in channels])
         component_output.append(component_image)
 
     # Add all components together
