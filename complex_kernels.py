@@ -68,7 +68,6 @@ def get_parameters(component_count=2):
 
 # Produces a complex kernel of a given radius and scale (adjusts radius to be more accurate)
 # a and b are parameters of this complex kernel
-@njit()
 def complex_kernel_1d(radius, scale, a, b):
     kernel_radius = radius
     kernel_size = kernel_radius * 2 + 1
@@ -101,14 +100,12 @@ def normalise_kernels(kernels: List, params: List):
 
 
 # Combine the real and imaginary parts of an image, weighted by A and B
-@njit()
 def weighted_sum(kernel: np.ndarray, param_a: float, param_b: float):
     return np.add(kernel.real * param_a, kernel.imag * param_b)
 
 
 # Produce a 2D kernel by self-multiplying a 1d kernel. This would be slower to use
 # than the separable approach, mostly for visualisation below
-@njit()
 def multiply_kernel(kernel):
     kernel_size = kernel.shape[1]
     a = np.repeat(kernel, kernel_size, 0)
